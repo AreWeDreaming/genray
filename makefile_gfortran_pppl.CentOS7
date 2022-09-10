@@ -1,0 +1,182 @@
+# makefile for GENRAY using gnu 64-bit fortran 95 compiler.
+# N.Ershov
+# 24 Jan, 2003
+# USAGE:
+# make - as usual make
+# make rebuild - rebuild whole program
+# make clean - remove all *.o files
+
+#This makefile_gfortran.CentOS7.1 version uses -fdefault-real-8, but
+#presently causes errors where explicit real*4 variables are required,
+#for example, for binary output files.
+#It is desireable to use this -fdefault-real-8, to increase accuracy
+#and consistency of the output.  Real*4 constants are extended as
+#accurately as possible to real*8.
+#
+#NOTE: Use makefile_gfortran.CentOS7 for the time being, until required
+#adjustments are made.   BH201122
+
+#Don't use  read_write_genray_input.f in transp, which
+#is copied to TRANSP prepare_genray_input_sub instead
+
+#NOTE: set precision ?
+
+SHELL= /bin/sh
+NAME= xgenray
+LIBNAME= genray
+PGPLOT=    # /usr/pppl/pgplot/5.2.2
+
+COMPILER=
+ifneq (,$(findstring ifort, $(F90)))
+COMPILER = ifort
+else ifneq (,$(findstring gfortran, $(F90)))
+COMPILER = gfortran
+endif
+
+BUILDER= $(COMPILER)
+INCLUDES= antenna.i adj.i bripplb.i cefield.i cone.i dskin.i eps.i \
+	emissa.i five.i fourb.i gr.i grill.i ions.i \
+	limit.i  loopb.i nperpcom.i \
+	lsc_approach.i  lsc_approach_nml.i  lsc_approach_no_nml.i \
+	name_lsc_approach_nml.i \
+	name.i name_eccone.i name_genr.i name_grill.i \
+	name_non_uniform_mesh_profiles_line.i \
+	name_tokamak.i name_uniform_mesh_profiles.i \
+	output.i one.i \
+	onetwo.i oxb.i \
+	rho.i six.i spline_distrib.i three.i \
+	transport_prof.i \
+	write.i writencdf.i \
+	commons.i param.i  rrange.i n_parb.i rkutta.i \
+	globcd.h globcd1.h globcd2.h
+# netcdf.inc
+# TODO edit genray.f to change program to subroutine
+SOURCES= genray.f abc.f   absorpfw.f \
+	absorplh.f   arrays.f abhay_disp.f \
+	adj_sub.f adj_vmlibpr.f adj_orbit.f adj_control.f \
+	b.f  bcast.f besk.f besk2as.f bessel.f   bound.f \
+	bess_slatec.f besvec.f cn.f \
+	chamber_wall.f \
+	cninit.f   cnpermuz.f  coldm.f   complx.f  cone_ec.f \
+	contour.f croot.f  curba.f curba_GA.f \
+	combine_disp.f \
+		dcom16.f dddrz1.f dense.f dinit.f \
+	dmnf.f dskin.f dten16.f dxdphi.f   dxdr.f   dxdz.f \
+	dydphi.f   dydr.f   dydz.f   efield.f  efield1.f \
+	equilib.f emission.f emission_spectrum.f  eric_disp.f \
+	flown.f  forest.f fokker.f  gamma.f \
+	gr2new.f    gr3.f grill_lh.f   hamilmuz.f   hamilt1.f \
+	hamilt_lambda.f lh_bonoli_disp.f lh_scattering.f limiter.f \
+	lin_liu_curnt.f lh_ql_flux.f lsc_approach.f \
+	mathcurb.f   mk_graph.f mmdei.f  mullerfun2.f  ninit_ec.f \
+	netcdfr3d.f number1.f \
+	outinit.f   output.f  outputb1.f  ono_disp.f oxb.f \
+	partner.f plasmray.f \
+	prep3d.f  prepripl.f  rhospl.f   rk_new.f \
+	read_write_genray_input_prep.f \
+	rkb1.f rside1.f  relat_tens.f scatperp.f shkarofs.f \
+	rsideb1.f   s.f   sdr1.f   se.f   spline.f spldens.f \
+	slatec_ram.f \
+	stop.f tensrcld.f \
+	uertst.f   ugetio.f   uspkd.f \
+	write3d.f x.f   y.f wconvini.f zcunix.f \
+	zfunc.f   zr_psith.f zfun_cur.f
+
+F90SRCS= kind_spec.f90 const_and_precisions.f90 quanc8.f90 config_ext.f90 green_func_ext.f90
+
+OBJECTS= $(SOURCES:.f=.o)
+F90OBJS= $(F90SRCS:.f90=.o)
+MPIOBJS= $(SOURCES:.f=.mpio)
+
+NCDIR= ncdir
+NCDIRC = ncc
+
+ifdef NETCDF_C_HOME
+NCDIRC = $(NETCDF_C_HOME)
+endif
+ifdef NETCDF_FORTRAN_HOME
+NCDIR = $(NETCDF_FORTRAN_HOME)
+else
+ifdef NETCDF_DIR
+NCDIR = $(NETCDF_DIR)
+endif
+endif
+
+
+PGPLOT_LIBS = #-L$(PGPLOT)  -lpgplot
+LOCATION =
+# -lhdf5_hl  -lhdf5
+NCLIBS = -L$(NCDIR)/lib -lnetcdff  -L$(NCDIRC)/lib -lnetcdf -L$(HDF5_HOME)/lib -lhdf5hl_fortran -lhdf5_fortran
+INCLUDE= -I/usr/include -I$(NCDIR)/include -I$(NCDIRC)/include
+LIBS= $(PGPLOT_LIBS) $(NCLIBS)   -L/usr/X11R6/lib64  -L/usr/lib64 -lz -lX11 -lgcc -llapack -lblas -lcurl -lm
+
+
+DEBUG=
+CSPECIAL=
+OPTIMIZE=
+BSPECIAL=
+PREPROC=
+
+
+ifneq (,$(findstring ifort, $(COMPILER)))
+  #LIBS += -cxxlib
+#PREPROC=-fpp
+OPTIMIZE= -fast
+CSPECIAL= -O3 -check bounds -check pointers -check uninit -traceback -fPIC -ftz -fp-speculation=safe  #-fpe0
+endif
+ifneq (,$(findstring gfortran, $(COMPILER)))
+        #LIBS += -lgcc
+#PREPROC=-cpp
+#from TORAY
+CSPECIAL= -O3 -fno-align-commons -fbounds-check -fbacktrace -fPIC -fcheck=pointer
+#GCC TRANSP: -m64 -ffpe-trap=invalid,zero,overflow -fno-range-check -fdollar-ok
+# works for ifort :
+# CSPECIAL= -O3 -frecord-marker=4  -fno-align-commons -fPIC
+# GCC TRANSP: -O3 -frecord-marker=4  -fno-align-commons -fbounds-check -fbacktrace -fPIC -fcheck=pointer
+endif
+
+COMPILE= $(COMPILER) -c $(CSPECIAL) $(OPTIMIZE) $(INCLUDE) -I$(NCDIR)/include
+#COMPILE= $(COMPILER) -c -DTRANSP_PPPL $(PREPROC) $(CSPECIAL) $(OPTIMIZE) -I $(INCLUDE) -I$(NCDIR)/include
+BUILD= $(BUILDER)  -o $(NAME) $(BSPECIAL) $(OPTIMIZE) $(INCLUDE)
+PROTECT= chmod 755
+DELETE= rm -f
+
+
+LIBOBJS = $(filter-out genray.o , $(F90OBJS) genray_transp.o $(OBJECTS) )
+#LIBOBJS = $(filter-out genray.o read_write_genray_input_prep.o, $(F90OBJS) genray_transp.o $(OBJECTS) )
+
+lib$(LIBNAME).a: $(LIBOBJS)
+	sed -i 's/\&eqdskin\*256.*/\&eqdskin*128,/Ig' one_nml.i
+	ar rcs $@ $^
+
+genray_transp.o: genray.f
+	cp genray.f genray_transp.f
+	sed -i 's/program *genray/SUBROUTINE GENRAY_TRANSP_SUB/I' genray_transp.f
+	sed -i  's/end *program.*/END SUBROUTINE/I' genray_transp.f
+	$(COMPILE) genray_transp.f
+
+exe: $(NAME)
+
+$(NAME): $(F90OBJS) $(OBJECTS)
+	$(BUILD) $(F90OBJS) $(OBJECTS) $(LOCATION) $(LIBS)
+	$(PROTECT) $(NAME)
+
+lib: lib$(LIBNAME).a
+
+all: lib exe
+
+$(SOURCES): $(INCLUDES)
+$(OBJECTS): %.o: %.f
+	$(COMPILE) $< -o $@
+$(F90OBJS): %.o: %.f90
+	$(COMPILE) $< -o $@
+rebuild:
+	$(COMPILE) $(F90SRCS) $(SOURCES)
+	$(BUILD) $(F90OBJS) $(OBJECTS) $(LOCATION) $(LIBS)
+	$(PROTECT) $(NAME)
+
+clean:
+	$(DELETE) $(OBJECTS) $(F90OBJS) *.o  *.mod  lib$(LIBNAME).a
+
+# recreate library and edit one_nml file everytime by adding it to phony
+.PHONY: all lib exe rebuild clean   lib$(LIBNAME).a
